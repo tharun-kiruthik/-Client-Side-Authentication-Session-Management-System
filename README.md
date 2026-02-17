@@ -1,1 +1,267 @@
-# -Client-Side-Authentication-Session-Management-System
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>University Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Existing Styles */
+        *{margin:0;padding:0;box-sizing:border-box;font-family:Poppins}
+        body{background:linear-gradient(135deg,#141e30,#243b55);color:#fff;min-height:100vh;display:flex;}
+        .sidebar{width:230px;background:#0b132b;padding:20px;display:flex;flex-direction:column;}
+        .sidebar h2{text-align:center;margin-bottom:20px;}
+        .sidebar button{background:none;border:none;color:#fff;padding:12px;text-align:left;cursor:pointer;border-radius:8px;margin-bottom:6px;}
+        .sidebar button:hover{background:#1c2541;}
+        .main{flex:1;padding:20px;}
+        .card{background:rgba(255,255,255,0.07);backdrop-filter:blur(10px);border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:0 8px 20px rgba(0,0,0,0.3);}
+        input,select{width:100%;padding:10px;margin:6px 0;border-radius:8px;border:none;outline:none;}
+        button.primary{width:100%;background:#00c6ff;color:#000;padding:10px;border:none;border-radius:8px;cursor:pointer;font-weight:bold;margin-top:10px;}
+        button.primary:hover{opacity:.8}
+        .hidden{display:none !important;}
+        .task-done{text-decoration:line-through;color:#00ff9f}
+        .fail{color:#ff5c5c;font-weight:bold}
+        table{width:100%;margin-top:10px;border-collapse:collapse;}
+        td,th{border:1px solid rgba(255,255,255,0.2);padding:8px;text-align:center;}
+        .clock{font-size:32px;text-align:center;margin-bottom:10px}
+        ul{list-style: none; margin-top: 15px;}
+        li{display: flex; justify-content: space-between; background: rgba(255,255,255,0.1); padding: 8px; margin-bottom: 5px; border-radius: 5px;}
+    </style>
+</head>
+<body>
+
+<div id="loginScreen" style="margin:auto;width:350px;">
+    <div class="card">
+        <h2 style="text-align:center">University Login</h2>
+        <input id="username" placeholder="Username (admin or student)">
+        <input id="password" type="password" placeholder="Password (123)">
+        <button class="primary" id="loginBtn">Login</button>
+        <p id="loginMsg" style="color:#ff5c5c; text-align:center; margin-top:10px;"></p>
+    </div>
+</div>
+
+<div id="app" class="hidden" style="width:100%">
+    <div style="display:flex; min-height:100vh;">
+        <div class="sidebar">
+            <h2>🎓 Portal</h2>
+            <button onclick="show('todo')">Todo</button>
+            <button onclick="show('student')">Students</button>
+            <button onclick="show('product')">Products</button>
+            <button onclick="show('timer')">Timer</button>
+            <button onclick="show('oop')">Roles</button>
+            <button onclick="logout()" style="margin-top:auto; background:#ff5c5c; color:white;">Logout</button>
+        </div>
+
+        <div class="main">
+            <div id="todo" class="card">
+                <h3>Task Manager</h3>
+                <input id="taskInput" placeholder="New task">
+                <button class="primary" onclick="addTask()">Add Task</button>
+                <ul id="taskList"></ul>
+            </div>
+
+            <div id="student" class="card hidden">
+                <h3>Student Analyzer</h3>
+                <input id="sname" placeholder="Student Name">
+                <div id="marksGrid" style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+                    </div>
+                <button class="primary" onclick="addStudent()">Add Student</button>
+                <div id="studentTable"></div>
+            </div>
+
+            <div id="product" class="card hidden">
+                <h3>Product Search</h3>
+                <input id="search" placeholder="Search by name...">
+                <select id="category">
+                    <option value="">All Categories</option>
+                    <option value="tech">Tech</option>
+                    <option value="book">Book</option>
+                </select>
+                <div id="products" style="margin-top:10px;"></div>
+            </div>
+
+            <div id="timer" class="card hidden">
+                <div class="clock" id="clock">00:00:00</div>
+                <div style="display:flex; gap:10px;">
+                    <input id="min" type="number" placeholder="Min" min="0">
+                    <input id="sec" type="number" placeholder="Sec" min="0" max="59">
+                </div>
+                <button class="primary" onclick="startTimer()">Start Countdown</button>
+                <p id="timerOut" style="text-align:center; font-size: 24px; margin-top:10px;"></p>
+            </div>
+
+            <div id="oop" class="card hidden"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+/* 1. AUTH LOGIC */
+const users = [
+    {username:"admin", password:"123", role:"admin", locked:false, attempt:0},
+    {username:"student", password:"123", role:"student", locked:false, attempt:0}
+];
+
+const loginBtn = document.getElementById('loginBtn');
+const loginMsg = document.getElementById('loginMsg');
+
+loginBtn.onclick = () => {
+    const u = document.getElementById('username').value;
+    const p = document.getElementById('password').value;
+    const user = users.find(x => x.username === u);
+
+    if (!user) { loginMsg.textContent = "User not found"; return; }
+    if (user.locked) { loginMsg.textContent = "Account locked (3 failed attempts)"; return; }
+
+    if (user.password === p) {
+        localStorage.setItem("session", JSON.stringify(user));
+        checkSession();
+    } else {
+        user.attempt++;
+        if (user.attempt >= 3) {
+            user.locked = true;
+            loginMsg.textContent = "Account Locked!";
+        } else {
+            loginMsg.textContent = `Wrong password. Attempts: ${user.attempt}/3`;
+        }
+    }
+};
+
+function checkSession() {
+    const session = localStorage.getItem("session");
+    if (session) {
+        document.getElementById("loginScreen").classList.add("hidden");
+        document.getElementById("app").classList.remove("hidden");
+        render(); // Init todo list
+    }
+}
+
+function logout() {
+    localStorage.removeItem("session");
+    location.reload();
+}
+
+// Navigation
+function show(id) {
+    document.querySelectorAll(".main .card").forEach(c => c.classList.add("hidden"));
+    document.getElementById(id).classList.remove("hidden");
+}
+
+/* 2. TODO LOGIC */
+let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+function addTask() {
+    const input = document.getElementById('taskInput');
+    if (!input.value) return;
+    tasks.push({id: Date.now(), title: input.value, done: false});
+    input.value = "";
+    save();
+}
+function save() {
+    localStorage.setItem("tasks", JSON.stringify(tasks));
+    render();
+}
+function render() {
+    const list = document.getElementById('taskList');
+    list.innerHTML = tasks.map(t => `
+        <li class="${t.done ? 'task-done' : ''}">
+            ${t.title}
+            <button onclick="toggle(${t.id})" style="cursor:pointer; background:none; border:none; color:white;">${t.done ? '↩️' : '✅'}</button>
+        </li>`).join("");
+}
+function toggle(id) {
+    tasks = tasks.map(t => t.id === id ? {...t, done: !t.done} : t);
+    save();
+}
+
+/* 3. STUDENT ANALYZER */
+const marksGrid = document.getElementById('marksGrid');
+for(let i=1; i<=5; i++) marksGrid.innerHTML += `<input class="mark" type="number" placeholder="Subject ${i}">`;
+
+let students = [];
+function addStudent() {
+    const name = document.getElementById('sname').value;
+    const markInputs = document.querySelectorAll(".mark");
+    const m = [...markInputs].map(x => +x.value || 0);
+    const total = m.reduce((a, b) => a + b, 0);
+    const avg = total / 5;
+    const hasFail = m.some(x => x < 40);
+    const grade = hasFail ? "Fail" : (avg > 80 ? "A" : "B");
+    
+    students.push({name, total, avg, grade});
+    renderStudents();
+    // Clear inputs
+    document.getElementById('sname').value = "";
+    markInputs.forEach(i => i.value = "");
+}
+function renderStudents() {
+    document.getElementById('studentTable').innerHTML = `
+    <table>
+        <tr><th>Name</th><th>Total</th><th>Avg</th><th>Grade</th></tr>
+        ${students.map(s => `
+        <tr>
+            <td>${s.name}</td>
+            <td>${s.total}</td>
+            <td>${s.avg.toFixed(1)}</td>
+            <td class="${s.grade === 'Fail' ? 'fail' : ''}">${s.grade}</td>
+        </tr>`).join("")}
+    </table>`;
+}
+
+/* 4. PRODUCTS */
+const productData = [
+    {name: "MacBook Air", category: "tech", price: 89000},
+    {name: "JS Guide", category: "book", price: 1200},
+    {name: "iPhone 15", category: "tech", price: 72000}
+];
+function showProducts(list) {
+    document.getElementById('products').innerHTML = list.map(p => 
+        `<div style="padding:10px; border-bottom:1px solid #444;">${p.name} - <b>₹${p.price}</b> <small>(${p.category})</small></div>`
+    ).join("");
+}
+function filter() {
+    const s = document.getElementById('search').value.toLowerCase();
+    const cat = document.getElementById('category').value;
+    let list = productData.filter(p => p.name.toLowerCase().includes(s));
+    if (cat) list = list.filter(p => p.category === cat);
+    showProducts(list);
+}
+document.getElementById('search').oninput = filter;
+document.getElementById('category').onchange = filter;
+
+/* 5. TIMER & CLOCK */
+setInterval(() => {
+    const clockEl = document.getElementById('clock');
+    if(clockEl) clockEl.textContent = new Date().toLocaleTimeString();
+}, 1000);
+
+let tInt;
+function startTimer() {
+    const m = document.getElementById('min').value;
+    const s = document.getElementById('sec').value;
+    let t = (+m * 60) + (+s);
+    if(t <= 0) return;
+
+    clearInterval(tInt);
+    tInt = setInterval(() => {
+        t--;
+        document.getElementById('timerOut').textContent = `${Math.floor(t/60)}m ${t%60}s`;
+        if (t <= 0) {
+            clearInterval(tInt);
+            alert("Time's up!");
+        }
+    }, 1000);
+}
+
+/* 6. OOP ROLES */
+class User { constructor(name) { this.name = name; } }
+class Admin extends User { role() { return "System Admin: " + this.name; } }
+const currentUser = new Admin("Tharun");
+document.getElementById('oop').innerHTML = `<h3>Role Profile</h3><p>${currentUser.role()}</p>`;
+
+// Run session check on load
+checkSession();
+showProducts(productData);
+</script>
+
+</body>
+</html>
